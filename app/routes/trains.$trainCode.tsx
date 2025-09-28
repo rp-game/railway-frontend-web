@@ -4,7 +4,8 @@ import { AppLayout, PageContainer, ResponsiveGrid } from "~/components/layout/re
 import { Button } from "~/components/ui/button";
 import { useTrainByCode } from "~/lib/api/hooks/use-trains";
 import { useProductsByStation } from "~/lib/api/hooks/use-products";
-import { formatPrice } from "~/lib/demo/trains";
+import { formatApiPrice } from "~/lib/utils/price";
+import Decimal from 'decimal.js';
 
 export default function TrainDetailsPage() {
   const { trainCode } = useParams();
@@ -192,7 +193,7 @@ export default function TrainDetailsPage() {
                   <p className="text-sm text-gray-600 mt-1">{product.description || 'Sản phẩm chất lượng'}</p>
                   <div className="mt-2 flex items-center justify-between">
                     <span className="font-semibold text-green-600">
-                      {formatPrice(product.price)}
+                      {formatApiPrice(new Decimal(product.price), 'VND')}
                     </span>
                     <span className="text-xs text-gray-500">
                       {product.vendor?.name || 'Nhà cung cấp'}

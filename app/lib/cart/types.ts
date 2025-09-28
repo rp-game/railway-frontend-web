@@ -5,13 +5,13 @@
  * All cart data is stored in localStorage for persistence.
  */
 
-import type { DemoProduct } from '../demo/products'
+import type { ExtendedProduct } from '../api/type-extensions'
 
 export interface CartItem {
   /** Unique identifier for this cart item */
   id: string
   /** Product information */
-  product: DemoProduct
+  product: ExtendedProduct
   /** Quantity selected */
   quantity: number
   /** Station where this item will be delivered */
@@ -71,7 +71,7 @@ export interface CartMetadata {
 }
 
 export interface AddToCartParams {
-  product: DemoProduct
+  product: ExtendedProduct
   quantity: number
   deliveryStation: string
   notes?: string

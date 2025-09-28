@@ -3,7 +3,8 @@ import { Link } from "react-router"
 import { AppLayout, PageContainer, ResponsiveGrid } from "~/components/layout/responsive-layout"
 import { Button } from "~/components/ui/button"
 import { useCart, useCartSummary } from "~/lib/cart/hooks"
-import { formatPrice } from "~/lib/demo/trains"
+import { formatApiPrice, getEffectivePrice } from "~/lib/utils/price"
+import Decimal from 'decimal.js'
 import type { CartItem } from "~/lib/cart/types"
 import { cn } from "~/lib/utils"
 
@@ -130,6 +131,8 @@ export default function CartPage() {
                     variant="ghost"
                     size="sm"
                     disabled={isLoading}
+                    className="!text-gray-600 hover:!text-red-600 hover:!bg-red-50 font-medium"
+                    style={{ color: '#4b5563' }}
                   >
                     Xóa tất cả
                   </Button>
@@ -158,16 +161,16 @@ export default function CartPage() {
               <div className="space-y-3 mb-4">
                 <div className="flex justify-between text-sm">
                   <span>Tạm tính:</span>
-                  <span>{formatPrice(summary.subtotal)}</span>
+                  <span>{formatApiPrice(new Decimal(summary.subtotal || 0), 'VND')}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Thuế VAT (10%):</span>
-                  <span>{formatPrice(summary.tax)}</span>
+                  <span>{formatApiPrice(new Decimal(summary.tax || 0), 'VND')}</span>
                 </div>
                 <div className="border-t pt-3">
                   <div className="flex justify-between font-semibold">
                     <span>Tổng cộng:</span>
-                    <span className="text-green-600">{formatPrice(summary.total)}</span>
+                    <span className="text-green-600">{formatApiPrice(new Decimal(summary.total || 0), 'VND')}</span>
                   </div>
                 </div>
               </div>
@@ -219,7 +222,7 @@ function CartItemRow({
   onQuantityChange: (quantity: number) => void
   onRemove: () => void
 }) {
-  const itemTotal = item.product.price * item.quantity
+  const itemTotal = getEffectivePrice(item.product).toNumber() * item.quantity
   const customizationTotal = (item.customizations || []).reduce(
     (sum, customization) => sum + customization.additionalPrice,
     0
@@ -244,7 +247,7 @@ function CartItemRow({
 
           <div className="flex items-center gap-4 text-sm text-gray-700">
             <span>📍 Ga {item.deliveryStation}</span>
-            <span>💰 {formatPrice(item.product.price)}</span>
+            <span>💰 {formatApiPrice(getEffectivePrice(item.product), 'VND')}</span>
             {item.notes && (
               <span>📝 {item.notes}</span>
             )}
@@ -256,7 +259,7 @@ function CartItemRow({
               {item.customizations.map((customization, index) => (
                 <div key={index} className="flex justify-between">
                   <span>+ {customization.choiceName}</span>
-                  <span>+{formatPrice(customization.additionalPrice)}</span>
+                  <span>+{formatApiPrice(new Decimal(customization.additionalPrice || 0), 'VND')}</span>
                 </div>
               ))}
             </div>
@@ -266,7 +269,7 @@ function CartItemRow({
         {/* Quantity & Actions */}
         <div className="flex flex-col items-end gap-3">
           <div className="font-semibold text-green-600">
-            {formatPrice(itemTotal + customizationTotal)}
+            {formatApiPrice(new Decimal((itemTotal || 0) + (customizationTotal || 0)), 'VND')}
           </div>
 
           {/* Quantity Controls */}
@@ -274,17 +277,19 @@ function CartItemRow({
             <button
               onClick={() => onQuantityChange(item.quantity - 1)}
               disabled={isUpdating || item.quantity <= 1}
-              className="px-3 py-1 hover:bg-gray-100 disabled:opacity-50"
+              className="px-3 py-1 hover:bg-gray-100 disabled:opacity-50 text-gray-700"
+              style={{ color: '#374151' }}
             >
               −
             </button>
-            <span className="px-3 py-1 text-sm min-w-[3rem] text-center">
+            <span className="px-3 py-1 text-sm min-w-[3rem] text-center text-gray-700" style={{ color: '#374151' }}>
               {item.quantity}
             </span>
             <button
               onClick={() => onQuantityChange(item.quantity + 1)}
               disabled={isUpdating || item.quantity >= 10 || item.quantity >= item.product.stockLevel}
-              className="px-3 py-1 hover:bg-gray-100 disabled:opacity-50"
+              className="px-3 py-1 hover:bg-gray-100 disabled:opacity-50 text-gray-700"
+              style={{ color: '#374151' }}
             >
               +
             </button>
@@ -295,7 +300,8 @@ function CartItemRow({
             variant="ghost"
             size="sm"
             disabled={isUpdating}
-            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            className="!text-red-600 hover:!text-red-700 hover:!bg-red-50 font-medium"
+            style={{ color: '#dc2626' }}
           >
             Xóa
           </Button>

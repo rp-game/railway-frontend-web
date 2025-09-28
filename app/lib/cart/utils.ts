@@ -13,7 +13,7 @@ import {
   CartErrorCode,
   CartError,
 } from './types'
-import type { DemoProduct } from '../demo/products'
+import type { ExtendedProduct } from '../api/type-extensions'
 
 /**
  * Calculate cart totals
@@ -78,18 +78,18 @@ export function generateCartItemId(): string {
 /**
  * Validate product availability
  */
-export function validateProductAvailability(product: DemoProduct): void {
-  if (!product.available) {
+export function validateProductAvailability(product: ExtendedProduct): void {
+  if (!product.isActive) {
     throw new CartError(
       CartErrorCode.PRODUCT_NOT_AVAILABLE,
-      `Sản phẩm "${product.name}" hiện không có sẵn`
+      `Sản phẩm "${product.name}" hiện không hoạt động`
     )
   }
 
-  if (product.stockLevel <= 0) {
+  if (!product.isVisible) {
     throw new CartError(
       CartErrorCode.PRODUCT_NOT_AVAILABLE,
-      `Sản phẩm "${product.name}" đã hết hàng`
+      `Sản phẩm "${product.name}" hiện không khả dụng`
     )
   }
 }
@@ -118,15 +118,16 @@ export function validateAddToCartParams(params: AddToCartParams, currentItems: C
     )
   }
 
-  // Check if adding this quantity would exceed stock
+  // Check if adding this quantity would exceed stock (using extended fields with fallbacks)
   const currentQuantityInCart = currentItems
-    .filter(item => item.product.productId === product.productId)
+    .filter(item => item.product.id === product.id)
     .reduce((sum, item) => sum + item.quantity, 0)
 
-  if (currentQuantityInCart + quantity > product.stockLevel) {
+  const stockLevel = product.stockLevel ?? 999999 // Fallback to unlimited if not provided
+  if (stockLevel > 0 && currentQuantityInCart + quantity > stockLevel) {
     throw new CartError(
       CartErrorCode.PRODUCT_NOT_AVAILABLE,
-      `Không đủ hàng trong kho. Còn lại: ${product.stockLevel - currentQuantityInCart}`
+      `Không đủ hàng trong kho. Còn lại: ${stockLevel - currentQuantityInCart}`
     )
   }
 
@@ -138,7 +139,8 @@ export function validateAddToCartParams(params: AddToCartParams, currentItems: C
     )
   }
 
-  if (!product.stationCodes.includes(deliveryStation)) {
+  const stationCodes = product.stationCodes ?? [] // Fallback to empty array if not provided
+  if (stationCodes.length > 0 && !stationCodes.includes(deliveryStation)) {
     throw new CartError(
       CartErrorCode.INVALID_STATION,
       `Sản phẩm "${product.name}" không có sẵn tại ga ${deliveryStation}`
@@ -190,7 +192,7 @@ export function validateCartItemUpdate(
     // Check stock availability
     const otherItemsQuantity = currentItems
       .filter(otherItem =>
-        otherItem.product.productId === item.product.productId &&
+        otherItem.product.id === item.product.id &&
         otherItem.id !== itemId
       )
       .reduce((sum, otherItem) => sum + otherItem.quantity, 0)
@@ -224,7 +226,7 @@ export function findExistingCartItem(
 ): CartItem | undefined {
   return items.find(
     item =>
-      item.product.productId === productId &&
+      item.product.id === productId &&
       item.deliveryStation === deliveryStation
   )
 }
@@ -244,7 +246,7 @@ export function mergeCartItems(items: CartItem[]): CartItem[] {
     // Find all items with same product and delivery station
     const similarItems = items.filter(
       otherItem =>
-        otherItem.product.productId === item.product.productId &&
+        otherItem.product.id === item.product.id &&
         otherItem.deliveryStation === item.deliveryStation &&
         JSON.stringify(otherItem.customizations || []) === JSON.stringify(item.customizations || [])
     )

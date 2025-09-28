@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { AppLayout, PageContainer, ResponsiveGrid } from "~/components/layout/responsive-layout";
 import { Button } from "~/components/ui/button";
 import { useTrainsSimple } from "~/lib/api/hooks/use-trains";
-import { formatPrice } from "~/lib/demo/trains";
+import { getFormattedProductPrice } from "~/lib/utils/price";
 import type { MappedTrain } from "~/lib/api/hooks/use-trains";
 
 export default function TrainsPage() {

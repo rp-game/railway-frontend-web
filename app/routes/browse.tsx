@@ -8,6 +8,8 @@ import { useProductCategories, useAvailableProducts, useProductsByCategory, useP
 import { getFormattedProductPrice } from "~/lib/utils/price";
 import type { MappedStation } from "~/lib/api/hooks/use-stations";
 import type { Product, ProductCategory } from "~/lib/api/generated";
+import type { ExtendedProduct, ExtendedProductCategory } from "~/lib/api/type-extensions";
+import { adaptProduct, adaptProductCategory, adaptProductDiscoveryResponse } from "~/lib/api/adapters";
 
 
 export default function BrowsePage() {
@@ -25,21 +27,24 @@ export default function BrowsePage() {
     trainCode: 'SE1', // Default train code for filtering
   });
 
-  // Extract data from API responses
-  const categories = categoriesResponse?.data || [];
+  // Extract and adapt data from API responses
+  const categories = (categoriesResponse?.data || []).map(adaptProductCategory);
 
   // Determine which products to show based on selection
-  let productsToShow: Product[] = [];
-  if (selectedStation && stationProductsResponse?.data) {
-    productsToShow = stationProductsResponse.data.filter((product: Product) =>
+  let productsToShow: ExtendedProduct[] = [];
+  if (selectedStation && stationProductsResponse) {
+    const adaptedResponse = adaptProductDiscoveryResponse(stationProductsResponse);
+    productsToShow = adaptedResponse.data.filter((product: ExtendedProduct) =>
       product.isActive && product.isVisible
     );
   } else if (selectedCategory && categoryProductsResponse?.data) {
-    productsToShow = categoryProductsResponse.data.filter((product: Product) =>
-      product.isActive && product.isVisible
-    );
+    productsToShow = categoryProductsResponse.data
+      .map(adaptProduct)
+      .filter((product: ExtendedProduct) =>
+        product.isActive && product.isVisible
+      );
   } else if (availableProductsResponse?.data) {
-    productsToShow = availableProductsResponse.data;
+    productsToShow = availableProductsResponse.data.map(adaptProduct);
   }
 
   // Compute loading and error states
@@ -137,7 +142,7 @@ export default function BrowsePage() {
                 key={category.id}
                 variant={selectedCategory === category.id ? "train" : "outline"}
                 onClick={() => {
-                  setSelectedCategory(category.id);
+                  setSelectedCategory(category.id || '');
                   setSelectedStation(null);
                 }}
                 className="text-sm flex items-center gap-1"
@@ -235,7 +240,7 @@ export default function BrowsePage() {
 }
 
 // Product Card Component
-function ProductCard({ product, categories }: { product: Product; categories: ProductCategory[] }) {
+function ProductCard({ product, categories }: { product: ExtendedProduct; categories: ExtendedProductCategory[] }) {
   const category = categories.find(cat => cat.id === product.categoryId);
 
   // Debug price structure - can be removed after testing

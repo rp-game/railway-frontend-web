@@ -1,11 +1,12 @@
 import * as React from "react"
 import { Button } from "~/components/ui/button"
-import type { Product } from "~/lib/api/generated"
+import type { ExtendedProduct } from "~/lib/api/type-extensions"
 import { cn } from "~/lib/utils"
 import { getEffectivePrice } from "~/lib/utils/price"
+import { getCartManager } from "~/lib/cart/hooks"
 
 interface ApiAddToCartButtonProps {
-  product: Product
+  product: ExtendedProduct
   deliveryStation?: string
   quantity?: number
   notes?: string
@@ -43,37 +44,18 @@ export function ApiAddToCartButton({
     setIsAdding(true)
 
     try {
-      // For now, we'll just simulate adding to cart since the cart system expects DemoProduct
-      // In a real implementation, this would need to be updated to work with the API
-      await new Promise(resolve => setTimeout(resolve, 1000)) // Simulate API call
+      // Use the shared cart manager singleton for real-time updates
+      const cartManager = getCartManager()
+      console.log('Before addToCart:', cartManager.getCartState().items.length)
 
-      // Convert API Product to a format that can be stored in cart
-      const effectivePrice = getEffectivePrice(product);
-      const cartItem = {
-        productId: product.id,
-        name: product.name,
-        price: effectivePrice.toNumber(), // Convert Decimal to number for storage
+      const cartItem = cartManager.addToCart({
+        product,
         quantity,
         deliveryStation,
-        notes,
-        currency: product.currency || 'VND',
-        // Add other necessary fields
-      }
+        notes
+      })
 
-      // Store in localStorage for now (simplified cart implementation)
-      const existingCart = JSON.parse(localStorage.getItem('cart') || '[]')
-      const existingItemIndex = existingCart.findIndex(
-        (item: any) => item.productId === product.id && item.deliveryStation === deliveryStation
-      )
-
-      if (existingItemIndex >= 0) {
-        existingCart[existingItemIndex].quantity += quantity
-      } else {
-        existingCart.push(cartItem)
-      }
-
-      localStorage.setItem('cart', JSON.stringify(existingCart))
-
+      console.log('After addToCart:', cartManager.getCartState().items.length)
       onSuccess?.(cartItem)
     } catch (error) {
       onError?.("Không thể thêm sản phẩm vào giỏ hàng")
@@ -133,7 +115,7 @@ export function ApiAddToCartButton({
 }
 
 interface ApiQuickAddToCartProps {
-  product: Product
+  product: ExtendedProduct
   defaultStation?: string
   showQuantitySelector?: boolean
   className?: string

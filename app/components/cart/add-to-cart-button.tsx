@@ -1,12 +1,12 @@
 import * as React from "react"
 import { Button } from "~/components/ui/button"
 import { useAddToCart } from "~/lib/cart"
-import type { DemoProduct } from "~/lib/demo/products"
+import type { ExtendedProduct } from "~/lib/api/type-extensions"
 import type { AddToCartParams } from "~/lib/cart"
 import { cn } from "~/lib/utils"
 
 interface AddToCartButtonProps {
-  product: DemoProduct
+  product: ExtendedProduct
   deliveryStation: string
   quantity?: number
   notes?: string
@@ -69,15 +69,15 @@ export function AddToCartButton({
   }, [clearState])
 
   const isDisabled = disabled ||
-    !product.available ||
-    product.stockLevel <= 0 ||
+    !product.isActive ||
+    !product.isVisible ||
     !deliveryStation ||
     isAdding
 
   const buttonText = children || (
     isAdding ? "Đang thêm..." :
-    !product.available ? "Hết hàng" :
-    product.stockLevel <= 0 ? "Hết hàng" :
+    !product.isActive ? "Sản phẩm không hoạt động" :
+    !product.isVisible ? "Sản phẩm không khả dụng" :
     !deliveryStation ? "Chọn ga giao" :
     "Thêm vào giỏ"
   )
@@ -107,7 +107,7 @@ export function AddToCartButton({
 }
 
 interface QuickAddToCartProps {
-  product: DemoProduct
+  product: ExtendedProduct
   defaultStation?: string
   showQuantitySelector?: boolean
   className?: string
@@ -136,35 +136,44 @@ export function QuickAddToCart({
     setTimeout(() => setErrorMessage(null), 5000)
   }
 
-  // Auto-select station if product is only available at one station
+  // Auto-select station if vendor has a station code or use default
   React.useEffect(() => {
-    if (!selectedStation && product.stationCodes.length === 1) {
-      setSelectedStation(product.stationCodes[0])
+    if (!selectedStation) {
+      if (product.vendor?.stationCode) {
+        setSelectedStation(product.vendor.stationCode)
+      } else if (defaultStation) {
+        setSelectedStation(defaultStation)
+      } else {
+        // Auto-select first available station as fallback
+        setSelectedStation('HAN') // Default to Hanoi station
+      }
     }
-  }, [product.stationCodes, selectedStation])
+  }, [product.vendor?.stationCode, selectedStation, defaultStation])
 
   return (
     <div className={cn("space-y-3", className)}>
-      {/* Station Selector */}
-      {product.stationCodes.length > 1 && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Ga giao hàng
-          </label>
-          <select
-            value={selectedStation}
-            onChange={(e) => setSelectedStation(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="">Chọn ga...</option>
-            {product.stationCodes.map((stationCode) => (
-              <option key={stationCode} value={stationCode}>
-                Ga {stationCode}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+      {/* Station Selector - show when no station selected or allow changing */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Ga giao hàng
+        </label>
+        <select
+          value={selectedStation}
+          onChange={(e) => setSelectedStation(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+        >
+          <option value="">Chọn ga...</option>
+          {product.vendor?.stationCode && (
+            <option value={product.vendor.stationCode}>
+              Ga {product.vendor.stationCode}
+            </option>
+          )}
+          {/* Default stations */}
+          <option value="HAN">Ga Hà Nội</option>
+          <option value="DNA">Ga Đà Nẵng</option>
+          <option value="SGN">Ga Sài Gòn</option>
+        </select>
+      </div>
 
       {/* Quantity Selector */}
       {showQuantitySelector && (

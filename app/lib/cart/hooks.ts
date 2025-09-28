@@ -19,7 +19,7 @@ import { getCartStatus, getCartSummaryText } from './utils'
 // Global cart manager instance
 let cartManagerInstance: CartManager | null = null
 
-function getCartManager(): CartManager {
+export function getCartManager(): CartManager {
   if (!cartManagerInstance) {
     cartManagerInstance = new CartManager()
   }
@@ -41,7 +41,10 @@ export function useCart() {
   // Subscribe to cart changes
   useEffect(() => {
     const manager = getCartManager()
-    const unsubscribe = manager.subscribe(setCartState)
+    const unsubscribe = manager.subscribe((newState) => {
+      console.log('Cart state updated:', newState.items.length)
+      setCartState(newState)
+    })
     return unsubscribe
   }, [])
 
