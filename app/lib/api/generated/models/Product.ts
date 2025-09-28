@@ -10,6 +10,18 @@ import type { ProductVariant } from './ProductVariant';
 import type { Vendor } from './Vendor';
 export type Product = {
     /**
+     * Product ID
+     */
+    id: string;
+    /**
+     * Creation timestamp
+     */
+    createdAt: string;
+    /**
+     * Last update timestamp
+     */
+    updatedAt: string;
+    /**
      * Product name
      */
     name: string;

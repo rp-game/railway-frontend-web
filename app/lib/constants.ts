@@ -9,7 +9,7 @@ export const APP_CONFIG = {
 } as const
 
 export const API_CONFIG = {
-  baseUrl: import.meta.env.VITE_API_BASE_URL || 'https://api.dsvn-food.vn',
+  baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3400',
   publicBasePath: '/api/v1/public',
   timeout: 10000,
   retries: 3,

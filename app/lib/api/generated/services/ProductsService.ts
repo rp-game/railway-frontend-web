@@ -3,6 +3,7 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { CreateCategoryDto } from '../models/CreateCategoryDto';
+import type { CreateProductDto } from '../models/CreateProductDto';
 import type { Product } from '../models/Product';
 import type { ProductCategory } from '../models/ProductCategory';
 import type { ProductDiscoveryResponseDto } from '../models/ProductDiscoveryResponseDto';
@@ -76,10 +77,16 @@ export class ProductsService {
      * @returns Product The product has been successfully created.
      * @throws ApiError
      */
-    public static productsControllerCreate(): CancelablePromise<Product> {
+    public static productsControllerCreate({
+        requestBody,
+    }: {
+        requestBody: CreateProductDto,
+    }): CancelablePromise<Product> {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/v1/products',
+            body: requestBody,
+            mediaType: 'application/json',
         });
     }
     /**

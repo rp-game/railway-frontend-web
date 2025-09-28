@@ -25,6 +25,7 @@ export type { CreateFaqDto } from './models/CreateFaqDto';
 export type { CreateOrderDto } from './models/CreateOrderDto';
 export type { CreateOrderItemDto } from './models/CreateOrderItemDto';
 export type { CreatePaymentDto } from './models/CreatePaymentDto';
+export type { CreateProductDto } from './models/CreateProductDto';
 export type { CreateSupportTicketDto } from './models/CreateSupportTicketDto';
 export type { CreateTagDto } from './models/CreateTagDto';
 export type { CreateVendorDto } from './models/CreateVendorDto';
