@@ -2,16 +2,35 @@ import { useState } from "react";
 import { useParams, Link } from "react-router";
 import { AppLayout, PageContainer, ResponsiveGrid } from "~/components/layout/responsive-layout";
 import { Button } from "~/components/ui/button";
-import { demoTrains, getTrainByCode, formatDuration, formatPrice, type DemoTrain, type DemoTrainStop } from "~/lib/demo/trains";
-import { demoStations, getStationByCode } from "~/lib/demo/stations";
-import { getProductsByStation } from "~/lib/demo/products";
+import { useTrainByCode } from "~/lib/api/hooks/use-trains";
+import { useProductsByStation } from "~/lib/api/hooks/use-products";
+import { formatPrice } from "~/lib/demo/trains";
 
 export default function TrainDetailsPage() {
   const { trainCode } = useParams();
-  const train = trainCode ? getTrainByCode(trainCode) : null;
-  const [selectedStop, setSelectedStop] = useState<string | null>(null);
 
-  if (!train) {
+  // Fetch train data using React Query
+  const { data: train, isLoading, error } = useTrainByCode(trainCode || '');
+
+  // For products, we'll need a station code - using default for now since the API structure changed
+  const { data: productsResponse } = useProductsByStation('HAN', {
+    trainCode: trainCode || 'SE1',
+  });
+
+  if (isLoading) {
+    return (
+      <AppLayout headerProps={{ showBackButton: true, title: "Thông tin chuyến tàu" }}>
+        <PageContainer>
+          <div className="text-center py-12">
+            <div className="text-4xl mb-4">⏳</div>
+            <p className="text-gray-800">Đang tải thông tin chuyến tàu...</p>
+          </div>
+        </PageContainer>
+      </AppLayout>
+    );
+  }
+
+  if (error || !train) {
     return (
       <AppLayout headerProps={{ showBackButton: true, title: "Thông tin chuyến tàu" }}>
         <PageContainer>
@@ -34,7 +53,7 @@ export default function TrainDetailsPage() {
     );
   }
 
-  const availableProducts = selectedStop ? getProductsByStation(selectedStop) : [];
+  const availableProducts = productsResponse?.data || [];
 
   return (
     <AppLayout headerProps={{ showBackButton: true, title: `Chuyến tàu ${train.trainCode}` }}>
@@ -44,24 +63,27 @@ export default function TrainDetailsPage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
-                {train.trainCode} - {train.routeName}
+                {train.trainCode} - {train.name}
               </h1>
               <div className="flex items-center gap-4 text-sm text-gray-800 mt-2">
                 <span className="flex items-center gap-1">
-                  🚄 {train.trainType}
+                  🚄 {train.type}
                 </span>
                 <span className="flex items-center gap-1">
-                  📏 {train.distance} km
+                  📏 {train.route.totalDistance} km
                 </span>
                 <span className="flex items-center gap-1">
-                  ⏱️ {formatDuration(train.duration)}
+                  ⏱️ {Math.floor(train.route.estimatedDuration / 60)}h {train.route.estimatedDuration % 60}m
+                </span>
+                <span className="flex items-center gap-1">
+                  🚃 {train.carriages} toa
                 </span>
               </div>
             </div>
             <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-              train.available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+              train.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
             }`}>
-              {train.available ? 'Có sẵn' : 'Hết chỗ'}
+              {train.status === 'active' ? 'Hoạt động' : 'Không hoạt động'}
             </div>
           </div>
 
@@ -69,18 +91,43 @@ export default function TrainDetailsPage() {
           <div className="grid md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
             <div>
               <h3 className="font-semibold text-gray-900 mb-1">Điểm khởi hành</h3>
-              <p className="text-gray-700">{train.departureStation.name}</p>
+              <p className="text-gray-700">{train.route.origin || 'N/A'}</p>
               <p className="text-sm text-gray-800">
-                {new Date(train.departureTime).toLocaleString('vi-VN')}
+                Ga đầu tuyến
               </p>
             </div>
             <div>
               <h3 className="font-semibold text-gray-900 mb-1">Điểm đến</h3>
-              <p className="text-gray-700">{train.arrivalStation.name}</p>
+              <p className="text-gray-700">{train.route.destination || 'N/A'}</p>
               <p className="text-sm text-gray-800">
-                {new Date(train.arrivalTime).toLocaleString('vi-VN')}
+                Ga cuối tuyến
               </p>
             </div>
+          </div>
+
+          {/* Train Details */}
+          <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+            <h3 className="font-semibold text-gray-900 mb-2">Thông tin tàu</h3>
+            <div className="grid md:grid-cols-3 gap-4 text-sm">
+              <div>
+                <span className="text-gray-600">Sức chứa:</span>
+                <span className="ml-2 font-medium">{train.capacity} hành khách</span>
+              </div>
+              <div>
+                <span className="text-gray-600">Số toa:</span>
+                <span className="ml-2 font-medium">{train.carriages} toa</span>
+              </div>
+              <div>
+                <span className="text-gray-600">Loại tàu:</span>
+                <span className="ml-2 font-medium">{train.type}</span>
+              </div>
+            </div>
+            {train.description && (
+              <div className="mt-3">
+                <span className="text-gray-600">Mô tả:</span>
+                <p className="mt-1 text-gray-700">{train.description}</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -88,14 +135,20 @@ export default function TrainDetailsPage() {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-lg font-semibold mb-4">Dịch vụ trên tàu</h2>
           <div className="flex flex-wrap gap-2 mb-4">
-            {train.services.map((service: string, index: number) => (
-              <span
-                key={index}
-                className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
-              >
-                {service}
+            {train.facilities.length > 0 ? (
+              train.facilities.map((facility: string, index: number) => (
+                <span
+                  key={index}
+                  className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                >
+                  {facility}
+                </span>
+              ))
+            ) : (
+              <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm">
+                Đang cập nhật thông tin dịch vụ
               </span>
-            ))}
+            )}
           </div>
 
           {/* Food Service Info */}
@@ -103,172 +156,101 @@ export default function TrainDetailsPage() {
             <h3 className="font-semibold text-orange-900 mb-2">
               🍽️ Dịch vụ ăn uống
             </h3>
-            {train.foodService.available ? (
-              <div className="space-y-2">
-                <p className="text-orange-800">
-                  ✅ Có dịch vụ ăn uống
-                </p>
+            <div className="space-y-2">
+              <p className="text-orange-800">
+                ✅ Có dịch vụ ăn uống
+              </p>
+              <p className="text-orange-700 text-sm">
+                📋 Menu đầy đủ có sẵn
+              </p>
+              <p className="text-orange-700 text-sm">
+                📍 Đặt hàng trực tuyến từ ứng dụng
+              </p>
+              {availableProducts.length > 0 && (
                 <p className="text-orange-700 text-sm">
-                  {train.foodService.menuAvailable
-                    ? '📋 Menu đầy đủ có sẵn'
-                    : '📋 Menu giới hạn'
-                  }
+                  🍽️ {availableProducts.length} sản phẩm có sẵn
                 </p>
-                <p className="text-orange-700 text-sm">
-                  📍 Có thể đặt tại: {train.foodService.orderingStops.join(', ')}
-                </p>
-              </div>
-            ) : (
-              <p className="text-orange-800">❌ Không có dịch vụ ăn uống</p>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Ticket Prices */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">Giá vé tham khảo</h2>
-          <ResponsiveGrid
-            cols={{ default: 2, md: 4 }}
-            gap="md"
-          >
-            <div className="text-center p-3 bg-gray-50 rounded-lg">
-              <div className="text-sm text-gray-800 mb-1">Ghế cứng</div>
-              <div className="font-semibold text-gray-900">
-                {formatPrice(train.ticketPrices.hardSeat)}
-              </div>
-            </div>
-            <div className="text-center p-3 bg-gray-50 rounded-lg">
-              <div className="text-sm text-gray-800 mb-1">Ghế mềm</div>
-              <div className="font-semibold text-gray-900">
-                {formatPrice(train.ticketPrices.softSeat)}
-              </div>
-            </div>
-            <div className="text-center p-3 bg-gray-50 rounded-lg">
-              <div className="text-sm text-gray-800 mb-1">Giường cứng</div>
-              <div className="font-semibold text-gray-900">
-                {formatPrice(train.ticketPrices.hardBerth)}
-              </div>
-            </div>
-            <div className="text-center p-3 bg-gray-50 rounded-lg">
-              <div className="text-sm text-gray-800 mb-1">Giường mềm</div>
-              <div className="font-semibold text-gray-900">
-                {formatPrice(train.ticketPrices.softBerth)}
-              </div>
-            </div>
-          </ResponsiveGrid>
-        </div>
-
-        {/* Train Stops */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">Lịch trình chi tiết</h2>
-          <div className="space-y-3">
-            {train.stops.map((stop: DemoTrainStop, index: number) => {
-              const station = getStationByCode(stop.stationCode);
-              const isSelected = selectedStop === stop.stationCode;
-
-              return (
-                <div
-                  key={stop.stationCode}
-                  className={`p-4 rounded-lg border transition-colors cursor-pointer ${
-                    isSelected
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                  onClick={() => setSelectedStop(isSelected ? null : stop.stationCode)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="flex flex-col items-center">
-                        <div className={`w-3 h-3 rounded-full ${
-                          index === 0 || index === train.stops.length - 1
-                            ? 'bg-blue-600'
-                            : 'bg-gray-400'
-                        }`} />
-                        {index < train.stops.length - 1 && (
-                          <div className="w-0.5 h-8 bg-gray-300 mt-1" />
-                        )}
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-900">
-                          {stop.stationName} ({stop.stationCode})
-                        </h3>
-                        <div className="flex items-center gap-4 text-sm text-gray-800">
-                          {stop.arrivalTime && (
-                            <span>🔽 Đến: {stop.arrivalTime}</span>
-                          )}
-                          {stop.departureTime && (
-                            <span>🔼 Đi: {stop.departureTime}</span>
-                          )}
-                          {stop.stopDuration > 0 && (
-                            <span>⏱️ Dừng: {stop.stopDuration}p</span>
-                          )}
-                          {stop.platform && (
-                            <span>🚉 Ga: {stop.platform}</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {station?.hasKitchen && train.foodService.orderingStops.includes(stop.stationCode) && (
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                          🍽️ Có thể đặt món
-                        </span>
-                        <span className="text-gray-600">
-                          {isSelected ? '▼' : '▶'}
-                        </span>
-                      </div>
-                    )}
+        {/* Available Products */}
+        {availableProducts.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 className="text-lg font-semibold mb-4">Sản phẩm có sẵn</h2>
+            <p className="text-gray-600 mb-4">
+              Các món ăn và đồ uống có thể đặt trên chuyến tàu này:
+            </p>
+            <ResponsiveGrid
+              cols={{ default: 1, md: 2, lg: 3 }}
+              gap="md"
+            >
+              {availableProducts.slice(0, 6).map((product: any) => (
+                <div key={product.id} className="p-3 bg-gray-50 rounded-lg">
+                  <h4 className="font-medium text-gray-900">{product.name}</h4>
+                  <p className="text-sm text-gray-600 mt-1">{product.description || 'Sản phẩm chất lượng'}</p>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="font-semibold text-green-600">
+                      {formatPrice(product.price)}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {product.vendor?.name || 'Nhà cung cấp'}
+                    </span>
                   </div>
-
-                  {/* Station Products */}
-                  {isSelected && station?.hasKitchen && (
-                    <div className="mt-4 pt-4 border-t border-gray-200">
-                      <h4 className="font-medium mb-3">
-                        Món ăn có sẵn tại {station.name}
-                      </h4>
-                      {availableProducts.length > 0 ? (
-                        <ResponsiveGrid
-                          cols={{ default: 1, md: 2 }}
-                          gap="sm"
-                        >
-                          {availableProducts.slice(0, 4).map((product) => (
-                            <div
-                              key={product.productId}
-                              className="p-3 bg-white border border-gray-200 rounded-lg"
-                            >
-                              <div className="flex justify-between items-start mb-1">
-                                <h5 className="font-medium text-sm">{product.name}</h5>
-                                <span className="text-green-600 font-semibold text-sm">
-                                  {formatPrice(product.price)}
-                                </span>
-                              </div>
-                              <p className="text-xs text-gray-800 line-clamp-2">
-                                {product.description}
-                              </p>
-                            </div>
-                          ))}
-                        </ResponsiveGrid>
-                      ) : (
-                        <p className="text-gray-800 text-sm">
-                          Hiện chưa có món ăn nào có sẵn tại ga này.
-                        </p>
-                      )}
-                      {availableProducts.length > 4 && (
-                        <Link
-                          to={`/browse?station=${stop.stationCode}`}
-                          className="inline-block mt-3"
-                        >
-                          <Button variant="outline" size="sm">
-                            Xem thêm {availableProducts.length - 4} món
-                          </Button>
-                        </Link>
-                      )}
-                    </div>
-                  )}
                 </div>
-              );
-            })}
+              ))}
+            </ResponsiveGrid>
+            {availableProducts.length > 6 && (
+              <div className="mt-4 text-center">
+                <Link to="/browse">
+                  <Button variant="outline">
+                    Xem thêm {availableProducts.length - 6} sản phẩm
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Route Information */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">Thông tin tuyến đường</h2>
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-4">
+                <div className="w-4 h-4 bg-blue-600 rounded-full"></div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Ga khởi hành</h3>
+                  <p className="text-gray-700">{train.route.origin || 'N/A'}</p>
+                </div>
+              </div>
+
+              <div className="flex-1 flex items-center justify-center">
+                <div className="h-0.5 bg-gray-300 flex-1 mx-4"></div>
+                <span className="text-sm text-gray-600 px-2">
+                  {train.route.totalDistance} km
+                </span>
+                <div className="h-0.5 bg-gray-300 flex-1 mx-4"></div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-right">Ga đích</h3>
+                  <p className="text-gray-700 text-right">{train.route.destination || 'N/A'}</p>
+                </div>
+                <div className="w-4 h-4 bg-blue-600 rounded-full"></div>
+              </div>
+            </div>
+
+            <div className="text-center text-sm text-gray-600">
+              <p>Thời gian ước tính: {Math.floor(train.route.estimatedDuration / 60)}h {train.route.estimatedDuration % 60}m</p>
+              <p className="mt-1">
+                <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
+                  🍽️ Có dịch vụ ăn uống trên tàu
+                </span>
+              </p>
+            </div>
           </div>
         </div>
 

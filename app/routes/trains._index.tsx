@@ -2,20 +2,29 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { AppLayout, PageContainer, ResponsiveGrid } from "~/components/layout/responsive-layout";
 import { Button } from "~/components/ui/button";
-import { demoTrains, getTrainsByType, getAvailableTrains, formatDuration, formatPrice, type DemoTrain } from "~/lib/demo/trains";
+import { useTrainsSimple } from "~/lib/api/hooks/use-trains";
+import { formatPrice } from "~/lib/demo/trains";
+import type { MappedTrain } from "~/lib/api/hooks/use-trains";
 
 export default function TrainsPage() {
-  const [filterType, setFilterType] = useState<'all' | 'SE' | 'TN' | 'SNT'>('all');
-  const [showOnlyAvailable, setShowOnlyAvailable] = useState(true);
+  const [filterType, setFilterType] = useState<'all' | 'EXPRESS' | 'FAST' | 'LOCAL'>('all');
+  const [showOnlyActive, setShowOnlyActive] = useState(true);
+
+  // Fetch trains using React Query
+  const { data: trains = [], isLoading, error } = useTrainsSimple();
 
   const filteredTrains = (() => {
-    let trains = showOnlyAvailable ? getAvailableTrains() : demoTrains;
+    let filteredList = trains;
 
-    if (filterType !== 'all') {
-      trains = trains.filter(train => train.trainType === filterType);
+    if (showOnlyActive) {
+      filteredList = filteredList.filter(train => train.status === 'active');
     }
 
-    return trains;
+    if (filterType !== 'all') {
+      filteredList = filteredList.filter(train => train.type === filterType);
+    }
+
+    return filteredList;
   })();
 
   return (
@@ -30,6 +39,32 @@ export default function TrainsPage() {
             Khám phá các chuyến tàu trên tuyến đường sắt Việt Nam có dịch vụ đặt món ăn
           </p>
         </div>
+
+        {/* Loading State */}
+        {isLoading && (
+          <div className="text-center py-12">
+            <div className="text-4xl mb-4">⏳</div>
+            <p className="text-gray-800">Đang tải danh sách chuyến tàu...</p>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="text-center py-12 bg-red-50 rounded-lg mb-8">
+            <div className="text-4xl mb-4">❌</div>
+            <p className="text-red-600 mb-4">Không thể tải danh sách chuyến tàu. Vui lòng thử lại sau.</p>
+            <Button
+              onClick={() => window.location.reload()}
+              variant="outline"
+            >
+              Thử lại
+            </Button>
+          </div>
+        )}
+
+        {/* Content - only show when not loading and no error */}
+        {!isLoading && !error && (
+          <>
 
         {/* Filters */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -46,25 +81,25 @@ export default function TrainsPage() {
                   Tất cả
                 </Button>
                 <Button
-                  variant={filterType === 'SE' ? 'train' : 'outline'}
-                  onClick={() => setFilterType('SE')}
+                  variant={filterType === 'EXPRESS' ? 'train' : 'outline'}
+                  onClick={() => setFilterType('EXPRESS')}
                   size="sm"
                 >
-                  SE - Thống Nhất
+                  EXPRESS - Tàu Thống Nhất
                 </Button>
                 <Button
-                  variant={filterType === 'TN' ? 'train' : 'outline'}
-                  onClick={() => setFilterType('TN')}
+                  variant={filterType === 'FAST' ? 'train' : 'outline'}
+                  onClick={() => setFilterType('FAST')}
                   size="sm"
                 >
-                  TN - Tàu Nhanh
+                  FAST - Tàu Nhanh
                 </Button>
                 <Button
-                  variant={filterType === 'SNT' ? 'train' : 'outline'}
-                  onClick={() => setFilterType('SNT')}
+                  variant={filterType === 'LOCAL' ? 'train' : 'outline'}
+                  onClick={() => setFilterType('LOCAL')}
                   size="sm"
                 >
-                  SNT - Sài Gòn Nha Trang
+                  LOCAL - Tàu Địa Phương
                 </Button>
               </div>
             </div>
@@ -74,12 +109,12 @@ export default function TrainsPage() {
               <label className="flex items-center gap-3">
                 <input
                   type="checkbox"
-                  checked={showOnlyAvailable}
-                  onChange={(e) => setShowOnlyAvailable(e.target.checked)}
+                  checked={showOnlyActive}
+                  onChange={(e) => setShowOnlyActive(e.target.checked)}
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
                 <span className="text-sm font-medium text-gray-700">
-                  Chỉ hiển thị tàu còn chỗ
+                  Chỉ hiển thị tàu đang hoạt động
                 </span>
               </label>
             </div>
@@ -104,7 +139,7 @@ export default function TrainsPage() {
             <Button
               onClick={() => {
                 setFilterType('all');
-                setShowOnlyAvailable(false);
+                setShowOnlyActive(false);
               }}
               variant="outline"
             >
@@ -139,13 +174,17 @@ export default function TrainsPage() {
             </Link>
           </div>
         </div>
+
+        {/* Close content wrapper */}
+        </>
+        )}
       </PageContainer>
     </AppLayout>
   );
 }
 
 // Train Card Component
-function TrainCard({ train }: { train: DemoTrain }) {
+function TrainCard({ train }: { train: MappedTrain }) {
   return (
     <Link to={`/trains/${train.trainCode}`}>
       <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
@@ -157,37 +196,37 @@ function TrainCard({ train }: { train: DemoTrain }) {
                 {train.trainCode}
               </h3>
               <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                train.available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                train.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
               }`}>
-                {train.available ? 'Còn chỗ' : 'Hết chỗ'}
+                {train.status === 'active' ? 'Hoạt động' : 'Không hoạt động'}
               </span>
               <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-                {train.trainType}
+                {train.type}
               </span>
             </div>
 
             <h4 className="text-lg font-semibold text-gray-900 mb-2">
-              {train.routeName}
+              {train.name}
             </h4>
 
             <div className="grid md:grid-cols-2 gap-4 text-sm text-gray-800">
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span>🔼</span>
-                  <span className="font-medium">{train.departureStation.name}</span>
+                  <span className="font-medium">{train.route.origin || 'N/A'}</span>
                 </div>
                 <div className="ml-6">
-                  {new Date(train.departureTime).toLocaleString('vi-VN')}
+                  Ga khởi hành
                 </div>
               </div>
 
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span>🔽</span>
-                  <span className="font-medium">{train.arrivalStation.name}</span>
+                  <span className="font-medium">{train.route.destination || 'N/A'}</span>
                 </div>
                 <div className="ml-6">
-                  {new Date(train.arrivalTime).toLocaleString('vi-VN')}
+                  Ga đích
                 </div>
               </div>
             </div>
@@ -196,56 +235,50 @@ function TrainCard({ train }: { train: DemoTrain }) {
           {/* Journey Info */}
           <div className="text-center md:text-right">
             <div className="text-2xl font-bold text-gray-900 mb-1">
-              {formatDuration(train.duration)}
+              {Math.floor(train.route.estimatedDuration / 60)}h {train.route.estimatedDuration % 60}m
             </div>
             <div className="text-sm text-gray-800 mb-2">
-              {train.distance} km
+              {train.route.totalDistance} km
             </div>
 
             {/* Food Service Status */}
-            <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${
-              train.foodService.available
-                ? 'bg-orange-100 text-orange-800'
-                : 'bg-gray-100 text-gray-800'
-            }`}>
+            <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-orange-100 text-orange-800">
               <span>🍽️</span>
-              <span>
-                {train.foodService.available
-                  ? train.foodService.menuAvailable
-                    ? 'Menu đầy đủ'
-                    : 'Menu giới hạn'
-                  : 'Không có'
-                }
-              </span>
+              <span>Có dịch vụ ăn uống</span>
             </div>
           </div>
 
-          {/* Price Range */}
+          {/* Train Details */}
           <div className="text-center">
-            <div className="text-sm text-gray-800 mb-1">Giá vé từ</div>
+            <div className="text-sm text-gray-800 mb-1">Sức chứa</div>
             <div className="text-lg font-bold text-green-600">
-              {formatPrice(train.ticketPrices.hardSeat)}
+              {train.capacity} chỗ
             </div>
             <div className="text-xs text-gray-700">
-              {train.stops.length} điểm dừng
+              {train.carriages} toa tàu
             </div>
           </div>
         </div>
 
-        {/* Train Services */}
+        {/* Train Facilities */}
         <div className="mt-4 pt-4 border-t border-gray-100">
           <div className="flex flex-wrap gap-2">
-            {train.services.slice(0, 4).map((service: string, index: number) => (
+            {train.facilities.slice(0, 4).map((facility: string, index: number) => (
               <span
                 key={index}
                 className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full"
               >
-                {service}
+                {facility}
               </span>
             ))}
-            {train.services.length > 4 && (
+            {train.facilities.length > 4 && (
               <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
-                +{train.services.length - 4} khác
+                +{train.facilities.length - 4} khác
+              </span>
+            )}
+            {train.facilities.length === 0 && (
+              <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
+                Đang cập nhật tiện ích
               </span>
             )}
           </div>
