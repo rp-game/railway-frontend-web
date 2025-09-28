@@ -1,74 +1,50 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
 import { AppLayout, PageContainer, ResponsiveGrid } from "~/components/layout/responsive-layout";
 import { Button } from "~/components/ui/button";
-import { api } from "~/lib/api/services";
-import { formatPrice } from "~/lib/demo/trains";
-import { QuickAddToCart } from "~/components/cart/add-to-cart-button";
-import type { DemoStation } from "~/lib/demo/stations";
-import type { DemoProduct, DemoProductCategory } from "~/lib/demo/products";
+import { ApiQuickAddToCart } from "~/components/cart/api-add-to-cart-button";
+import { useStationsWithKitchen } from "~/lib/api/hooks/use-stations";
+import { useProductCategories, useAvailableProducts, useProductsByCategory, useProductsByStation } from "~/lib/api/hooks/use-products";
+import { getFormattedProductPrice } from "~/lib/utils/price";
+import type { MappedStation } from "~/lib/api/hooks/use-stations";
+import type { Product, ProductCategory } from "~/lib/api/generated";
+
 
 export default function BrowsePage() {
   const [selectedStation, setSelectedStation] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [stationsWithKitchen, setStationsWithKitchen] = useState<DemoStation[]>([]);
-  const [categories, setCategories] = useState<DemoProductCategory[]>([]);
-  const [products, setProducts] = useState<DemoProduct[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  // Load initial data
-  useEffect(() => {
-    async function loadData() {
-      try {
-        setLoading(true);
-        setError(null);
+  // React Query hooks
+  const { data: stationsWithKitchen = [], isLoading: stationsLoading, error: stationsError } = useStationsWithKitchen();
+  const { data: categoriesResponse, isLoading: categoriesLoading, error: categoriesError } = useProductCategories();
+  const { data: availableProductsResponse, isLoading: productsLoading, error: productsError } = useAvailableProducts();
 
-        const [stationsData, categoriesData, productsData] = await Promise.all([
-          api.stations.getStationsWithKitchen(),
-          api.products.getCategories(),
-          api.products.getAvailableProducts(),
-        ]);
+  // Conditional queries for filtered products
+  const { data: categoryProductsResponse } = useProductsByCategory(selectedCategory || '');
+  const { data: stationProductsResponse } = useProductsByStation(selectedStation || '', {
+    trainCode: 'SE1', // Default train code for filtering
+  });
 
-        setStationsWithKitchen(stationsData);
-        setCategories(categoriesData);
-        setProducts(productsData);
-      } catch (err) {
-        console.error('Failed to load browse data:', err);
-        setError('Không thể tải dữ liệu. Vui lòng thử lại sau.');
-      } finally {
-        setLoading(false);
-      }
-    }
+  // Extract data from API responses
+  const categories = categoriesResponse?.data || [];
 
-    loadData();
-  }, []);
+  // Determine which products to show based on selection
+  let productsToShow: Product[] = [];
+  if (selectedStation && stationProductsResponse?.data) {
+    productsToShow = stationProductsResponse.data.filter((product: Product) =>
+      product.isActive && product.isVisible
+    );
+  } else if (selectedCategory && categoryProductsResponse?.data) {
+    productsToShow = categoryProductsResponse.data.filter((product: Product) =>
+      product.isActive && product.isVisible
+    );
+  } else if (availableProductsResponse?.data) {
+    productsToShow = availableProductsResponse.data;
+  }
 
-  // Filter products based on selection
-  useEffect(() => {
-    async function filterProducts() {
-      try {
-        if (selectedStation) {
-          const stationProducts = await api.products.getProductsByStation(selectedStation);
-          setProducts(stationProducts.filter(product => product.available && product.stockLevel > 0));
-        } else if (selectedCategory) {
-          const categoryProducts = await api.products.getProductsByCategory(selectedCategory);
-          setProducts(categoryProducts.filter(product => product.available && product.stockLevel > 0));
-        } else {
-          const allProducts = await api.products.getAvailableProducts();
-          setProducts(allProducts);
-        }
-      } catch (err) {
-        console.error('Failed to filter products:', err);
-      }
-    }
-
-    if (!loading) {
-      filterProducts();
-    }
-  }, [selectedStation, selectedCategory, loading]);
-
-  const productsToShow = products;
+  // Compute loading and error states
+  const loading = stationsLoading || categoriesLoading || productsLoading;
+  const error = stationsError || categoriesError || productsError;
 
   return (
     <AppLayout>
@@ -95,7 +71,7 @@ export default function BrowsePage() {
         {error && (
           <div className="text-center py-12 bg-red-50 rounded-lg mb-8">
             <div className="text-4xl mb-4">❌</div>
-            <p className="text-red-600 mb-4">{error}</p>
+            <p className="text-red-600 mb-4">Không thể tải dữ liệu. Vui lòng thử lại sau.</p>
             <Button
               onClick={() => window.location.reload()}
               variant="outline"
@@ -158,15 +134,15 @@ export default function BrowsePage() {
             </Button>
             {categories.map((category) => (
               <Button
-                key={category.categoryId}
-                variant={selectedCategory === category.categoryId ? "train" : "outline"}
+                key={category.id}
+                variant={selectedCategory === category.id ? "train" : "outline"}
                 onClick={() => {
-                  setSelectedCategory(category.categoryId);
+                  setSelectedCategory(category.id);
                   setSelectedStation(null);
                 }}
                 className="text-sm flex items-center gap-1"
               >
-                <span>{category.icon}</span>
+                <span>{category.icon || '🍽️'}</span>
                 <span>{category.name}</span>
               </Button>
             ))}
@@ -230,7 +206,7 @@ export default function BrowsePage() {
               gap="lg"
             >
               {productsToShow.map((product) => (
-                <ProductCard key={product.productId} product={product} categories={categories} />
+                <ProductCard key={product.id} product={product} categories={categories} />
               ))}
             </ResponsiveGrid>
           )}
@@ -259,8 +235,17 @@ export default function BrowsePage() {
 }
 
 // Product Card Component
-function ProductCard({ product, categories }: { product: DemoProduct; categories: DemoProductCategory[] }) {
-  const category = categories.find(cat => cat.categoryId === product.categoryId);
+function ProductCard({ product, categories }: { product: Product; categories: ProductCategory[] }) {
+  const category = categories.find(cat => cat.id === product.categoryId);
+
+  // Debug price structure - can be removed after testing
+  // console.log('Product price debug:', JSON.stringify({
+  //   productId: product.id,
+  //   productName: product.name,
+  //   basePrice: product.basePrice,
+  //   salePrice: product.salePrice,
+  //   currency: product.currency
+  // }, null, 2));
 
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
@@ -282,63 +267,59 @@ function ProductCard({ product, categories }: { product: DemoProduct; categories
           </h3>
           <div className="text-right ml-2">
             <div className="font-bold text-green-600">
-              {formatPrice(product.price)}
+              {getFormattedProductPrice(product)}
             </div>
           </div>
         </div>
 
         <p className="text-sm text-gray-800 mb-3 line-clamp-2">
-          {product.description}
+          {product.description || 'Mô tả sản phẩm đang được cập nhật.'}
         </p>
 
-        {/* Tags */}
+        {/* Tags - simplified for API structure */}
         <div className="flex flex-wrap gap-1 mb-3">
-          {product.dietaryFlags.map((flag: string, index: number) => (
-            <span
-              key={index}
-              className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full"
-            >
-              {flag === 'vegetarian' && '🌱 Chay'}
-              {flag === 'vegan' && '🌿 Thuần chay'}
-              {flag === 'halal' && '☪️ Halal'}
-              {flag === 'spicy' && '🌶️ Cay'}
+          {product.isVegetarian && (
+            <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+              🌱 Chay
             </span>
-          ))}
-        </div>
-
-        {/* Meta Info */}
-        <div className="flex justify-between items-center text-xs text-gray-700">
-          <div className="flex items-center gap-3">
-            <span>⏱️ {product.preparationTime}p</span>
-            <span>⭐ {product.rating}</span>
-          </div>
-          <div>
-            Có tại {product.stationCodes.length} ga
-          </div>
-        </div>
-
-        {/* Available Stations */}
-        <div className="mt-2 flex flex-wrap gap-1">
-          {product.stationCodes.slice(0, 3).map((code: string, index: number) => (
-            <span
-              key={index}
-              className="px-1.5 py-0.5 bg-gray-100 text-gray-700 text-xs rounded"
-            >
-              {code}
+          )}
+          {product.isSpicy && (
+            <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
+              🌶️ Cay
             </span>
-          ))}
-          {product.stationCodes.length > 3 && (
-            <span className="px-1.5 py-0.5 bg-gray-100 text-gray-700 text-xs rounded">
-              +{product.stationCodes.length - 3}
+          )}
+          {category?.name && (
+            <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+              {category.name}
             </span>
           )}
         </div>
 
+        {/* Meta Info - adapted to API structure */}
+        <div className="flex justify-between items-center text-xs text-gray-700">
+          <div className="flex items-center gap-3">
+            {product.preparationTime && <span>⏱️ {product.preparationTime}p</span>}
+            {product.averageRating && <span>⭐ {product.averageRating.toFixed(1)}</span>}
+          </div>
+          <div>
+            {product.vendor?.name || 'Nhà cung cấp'}
+          </div>
+        </div>
+
+        {/* Vendor Info */}
+        {product.vendor?.stationCode && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            <span className="px-1.5 py-0.5 bg-gray-100 text-gray-700 text-xs rounded">
+              {product.vendor.stationCode}
+            </span>
+          </div>
+        )}
+
         {/* Add to Cart */}
         <div className="mt-4 pt-4 border-t border-gray-100">
-          <QuickAddToCart
+          <ApiQuickAddToCart
             product={product}
-            defaultStation={product.stationCodes[0]}
+            defaultStation={product.vendor?.stationCode}
             showQuantitySelector={false}
           />
         </div>
